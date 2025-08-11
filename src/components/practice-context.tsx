@@ -24,7 +24,7 @@ const PracticeContext = createContext<PracticeContextType>({
   loading: true,
 });
 
-export function PracticeProvider({ children }: { children: React.ReactNode }) {
+function PracticeProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   const [practices, setPractices] = useState<Practice[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -92,6 +92,8 @@ export function PracticeProvider({ children }: { children: React.ReactNode }) {
     </PracticeContext.Provider>
   );
 }
+
+export default PracticeProvider;
 
 export function usePractice() {
   return useContext(PracticeContext);
