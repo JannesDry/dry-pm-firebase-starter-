@@ -1,38 +1,43 @@
-import "./globals.css";
-import Link from "next/link";
-import AuthProvider from "@/components/auth-provider";
-import SignOutButton from "./signout-button";
-import PracticeProvider from "@/components/practice-context";
-import PracticeSwitcher from "@/components/practice-switcher";
+import './globals.css';
+import Link from 'next/link';
+import { Inter } from 'next/font/google';
+
+const inter = Inter({ subsets: ['latin'] });
 
 export const metadata = {
-  title: "Dry PM (Firebase)",
-  description: "Practice Manager MVP"
+  title: 'Dry PM',
+  description: 'In-house Practice Management Software',
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
     <html lang="en">
-      <body>
-        <AuthProvider>
-          <PracticeProvider>
-            <div className="min-h-screen">
-              <nav className="border-b bg-white">
-                <div className="container flex h-14 items-center gap-6">
-                  <Link href="/dashboard" className="font-semibold">Dry PM</Link>
-                  <div className="flex gap-4 text-sm">
-                    <Link href="/patients">Patients</Link>
-                  </div>
-                  <div className="ml-auto flex items-center gap-4">
-                    <PracticeSwitcher />
-                    <SignOutButton />
-                  </div>
-                </div>
+      <body className={inter.className}>
+        <header className="border-b bg-white">
+          <div className="max-w-7xl mx-auto px-4 py-3 flex justify-between items-center">
+            {/* Logo / Brand */}
+            <div className="flex gap-6 items-center">
+              <Link href="/" className="text-lg font-semibold">
+                Dry PM
+              </Link>
+
+              {/* Navigation */}
+              <nav className="flex gap-4 text-sm">
+                <Link href="/patients">Patients</Link>
+                <Link href="/appointments">Appointments</Link>
+                <Link href="/files">Files</Link>
+                <Link href="/settings">Settings</Link>
               </nav>
-              <main className="container py-6">{children}</main>
             </div>
-          </PracticeProvider>
-        </AuthProvider>
+          </div>
+        </header>
+
+        {/* Main content */}
+        <main className="max-w-7xl mx-auto px-4 py-6">{children}</main>
       </body>
     </html>
   );
