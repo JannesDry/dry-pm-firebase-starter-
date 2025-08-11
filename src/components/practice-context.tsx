@@ -5,10 +5,7 @@ import { db } from '@/lib/firebase';
 import { collection, getDocs, doc, getDoc } from 'firebase/firestore';
 import { useAuth } from './auth-provider';
 
-type Practice = {
-  id: string;
-  name: string;
-};
+type Practice = { id: string; name: string };
 
 type PracticeContextType = {
   practices: Practice[];
@@ -31,51 +28,68 @@ function PracticeProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let isCancelled = false;
+
     async function fetchPractices() {
+      setLoading(true);
+
+      // Signed out: clear state
       if (!user) {
-        setPractices([]);
-        setSelectedId(null);
-        setLoading(false);
+        if (!isCancelled) {
+          setPractices([]);
+          setSelectedId(null);
+          setLoading(false);
+        }
         return;
       }
 
-      setLoading(true);
-
       try {
-        // 1) Allowed practice IDs from /users/{uid}
-        const userDocRef = doc(db, 'users', user.uid);
-        const userSnap = await getDoc(userDocRef);
-        const allowedPracticeIds: string[] =
-          userSnap.exists() && Array.isArray(userSnap.data()?.allowedPractices)
-            ? userSnap.data().allowedPractices
+        // 1) Get allowed practice ids from /users/{uid}
+        const uref = doc(db, 'users', user.uid);
+        const usnap = await getDoc(uref);
+        const allowedIds: string[] =
+          usnap.exists() && Array.isArray(usnap.data()?.allowedPractices)
+            ? (usnap.data()?.allowedPractices as string[])
             : [];
 
-        // 2) Load all practices then filter to allowed
-        const snap = await getDocs(collection(db, 'practices'));
-        const all: Practice[] = snap.docs.map(d => ({
-          id: d.id,
-          ...(d.data() as { name: string }),
-        }));
-        const filtered = all.filter(p => allowedPracticeIds.includes(p.id));
+        // 2) Load all practices and filter to allowed
+        const psnap = await getDocs(collection(db, 'practices'));
+        const all = psnap.docs.map(d => ({ id: d.id, ...(d.data() as any) })) as Practice[];
+        const allowed = all.filter(p => allowedIds.includes(p.id));
 
-        setPractices(filtered);
+        if (isCancelled) return;
 
-        // 3) Restore saved selection only if still allowed
+        setPractices(allowed);
+
+        // 3) Restore saved selection ONLY if still allowed
         const saved = typeof window !== 'undefined' ? localStorage.getItem('practiceId') : null;
-        if (saved && filtered.some(p => p.id === saved)) {
+        if (saved && allowed.some(p => p.id === saved)) {
           setSelectedId(saved);
         } else {
           setSelectedId(null);
         }
-      } catch (err) {
-        console.error('Error fetching practices:', err);
+      } catch (e) {
+        console.error('Failed to load practices:', e);
+      } finally {
+        if (!isCancelled) setLoading(false);
       }
-
-      setLoading(false);
     }
 
     fetchPractices();
+    return () => {
+      isCancelled = true;
+    };
   }, [user]);
+
+  // Persist selection changes
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      if (selectedId) localStorage.setItem('practiceId', selectedId);
+    } catch {
+      /* ignore storage errors */
+    }
+  }, [selectedId]);
 
   return (
     <PracticeContext.Provider value={{ practices, selectedId, setSelectedId, loading }}>
