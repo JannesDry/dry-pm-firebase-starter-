@@ -17,14 +17,12 @@ export default function Home() {
     if (!user) router.replace('/signin');
   }, [authLoading, user, router]);
 
-  // While auth/practice data is loading
   if (authLoading || !user || practiceLoading) {
     return <p>Loading…</p>;
   }
 
   return (
     <div className="space-y-5">
-      {/* If a working practice exists, show it + allow quick clear */}
       {selectedId && (
         <div className="flex items-center gap-3">
           <span className="text-sm text-gray-600">Current working practice:</span>
@@ -55,7 +53,6 @@ export default function Home() {
             </div>
             <Button
               onClick={() => {
-                // Set as working practice and go to Patients
                 setSelectedId(p.id);
                 try { localStorage.setItem('practiceId', p.id); } catch {}
                 router.push('/patients');
