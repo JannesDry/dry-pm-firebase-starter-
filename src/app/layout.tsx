@@ -2,6 +2,11 @@ import './globals.css';
 import Link from 'next/link';
 import { Inter } from 'next/font/google';
 
+import AuthProvider from '@/components/auth-provider';
+import PracticeProvider from '@/components/practice-context';
+import PracticeSwitcher from '@/components/practice-switcher';
+import SignOutButton from './signout-button';
+
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata = {
@@ -17,27 +22,32 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={inter.className}>
-        <header className="border-b bg-white">
-          <div className="max-w-7xl mx-auto px-4 py-3 flex justify-between items-center">
-            {/* Logo / Brand */}
-            <div className="flex gap-6 items-center">
-              <Link href="/" className="text-lg font-semibold">
-                Dry PM
-              </Link>
+        <AuthProvider>
+          <PracticeProvider>
+            <header className="border-b bg-white">
+              <div className="max-w-7xl mx-auto px-4 py-3 flex items-center gap-6">
+                {/* Brand */}
+                <Link href="/" className="text-lg font-semibold">
+                  Dry PM
+                </Link>
 
-              {/* Navigation */}
-              <nav className="flex gap-4 text-sm">
-                <Link href="/patients">Patients</Link>
-                <Link href="/appointments">Appointments</Link>
-                <Link href="/files">Files</Link>
-                <Link href="/settings">Settings</Link>
-              </nav>
-            </div>
-          </div>
-        </header>
+                {/* Nav */}
+                <nav className="flex gap-4 text-sm">
+                  <Link href="/patients">Patients</Link>
+                  <Link href="/appointments">Appointments</Link>
+                </nav>
 
-        {/* Main content */}
-        <main className="max-w-7xl mx-auto px-4 py-6">{children}</main>
+                {/* Right side */}
+                <div className="ml-auto flex items-center gap-4">
+                  <PracticeSwitcher />
+                  <SignOutButton />
+                </div>
+              </div>
+            </header>
+
+            <main className="max-w-7xl mx-auto px-4 py-6">{children}</main>
+          </PracticeProvider>
+        </AuthProvider>
       </body>
     </html>
   );
