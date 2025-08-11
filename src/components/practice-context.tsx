@@ -42,33 +42,26 @@ function PracticeProvider({ children }: { children: React.ReactNode }) {
       setLoading(true);
 
       try {
-        // Get allowed practices from user document
+        // 1) Allowed practice IDs from /users/{uid}
         const userDocRef = doc(db, 'users', user.uid);
         const userSnap = await getDoc(userDocRef);
+        const allowedPracticeIds: string[] =
+          userSnap.exists() && Array.isArray(userSnap.data()?.allowedPractices)
+            ? userSnap.data().allowedPractices
+            : [];
 
-        let allowedPracticeIds: string[] = [];
-        if (userSnap.exists()) {
-          allowedPracticeIds = userSnap.data()?.allowedPractices || [];
-        }
-
-        // Get all practices
-        const colRef = collection(db, 'practices');
-        const snap = await getDocs(colRef);
-
-        const allPractices: Practice[] = snap.docs.map(d => ({
+        // 2) Load all practices then filter to allowed
+        const snap = await getDocs(collection(db, 'practices'));
+        const all: Practice[] = snap.docs.map(d => ({
           id: d.id,
           ...(d.data() as { name: string }),
         }));
-
-        // Filter to allowed
-        const filtered = allPractices.filter(p =>
-          allowedPracticeIds.includes(p.id)
-        );
+        const filtered = all.filter(p => allowedPracticeIds.includes(p.id));
 
         setPractices(filtered);
 
-        // Load saved selection if still allowed
-        const saved = localStorage.getItem('practiceId');
+        // 3) Restore saved selection only if still allowed
+        const saved = typeof window !== 'undefined' ? localStorage.getItem('practiceId') : null;
         if (saved && filtered.some(p => p.id === saved)) {
           setSelectedId(saved);
         } else {
@@ -85,9 +78,7 @@ function PracticeProvider({ children }: { children: React.ReactNode }) {
   }, [user]);
 
   return (
-    <PracticeContext.Provider
-      value={{ practices, selectedId, setSelectedId, loading }}
-    >
+    <PracticeContext.Provider value={{ practices, selectedId, setSelectedId, loading }}>
       {children}
     </PracticeContext.Provider>
   );
