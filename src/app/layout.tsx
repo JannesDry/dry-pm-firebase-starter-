@@ -3,7 +3,7 @@ import AuthProvider from '@/components/auth-provider';
 import PracticeProvider from '@/components/practice-context';
 
 export const metadata = {
-  title: 'Dry PM',
+  title: 'Dry Optometrist',
   description: 'Optometry Practice Management Software',
 };
 
