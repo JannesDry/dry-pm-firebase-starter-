@@ -9,20 +9,22 @@ import { Card, Button } from '@/components/ui';
 export default function Home() {
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
-  const { practices, setSelectedId, selectedId, loading: practiceLoading } = usePractice();
+  const { practices, selectedId, setSelectedId, loading: practiceLoading } = usePractice();
 
-  // If not signed in, go to /signin
+  // If signed out -> go to /signin
   useEffect(() => {
     if (authLoading) return;
     if (!user) router.replace('/signin');
   }, [authLoading, user, router]);
 
+  // Show a tiny loader while auth/practices are loading
   if (authLoading || !user || practiceLoading) {
     return <p>Loading…</p>;
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
+      {/* Info + ability to clear current working practice */}
       {selectedId && (
         <div className="flex items-center gap-3">
           <span className="text-sm text-gray-600">Current working practice:</span>
@@ -35,7 +37,6 @@ export default function Home() {
               setSelectedId(null);
               try { localStorage.removeItem('practiceId'); } catch {}
             }}
-            title="Clear selection to switch"
           >
             Clear selection
           </Button>
@@ -44,8 +45,11 @@ export default function Home() {
 
       <h1 className="text-2xl font-semibold">Select a Practice</h1>
 
+      {/* If you ever wonder why cards aren't showing, this line helps: */}
+      {/* <pre className="text-xs text-gray-500">debug: selectedId={String(selectedId)} practices={JSON.stringify(practices)}</pre> */}
+
       <div className="grid gap-4 md:grid-cols-3">
-        {practices.map(p => (
+        {practices.map((p) => (
           <Card key={p.id} className="flex items-center justify-between">
             <div>
               <div className="text-lg font-medium">{p.name}</div>
@@ -63,6 +67,15 @@ export default function Home() {
           </Card>
         ))}
       </div>
+
+      {/* Safety net: if practices array is empty, tell us why */}
+      {practices.length === 0 && (
+        <p className="text-sm text-red-600">
+          No practices found for this user. Check Firestore:
+          users/&lt;uid&gt;/allowedPractices should include practice IDs like "p1","p2","p3",
+          and the "practices" collection must contain docs with those IDs.
+        </p>
+      )}
     </div>
   );
 }
