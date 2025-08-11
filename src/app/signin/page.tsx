@@ -16,7 +16,7 @@ export default function SignInPage() {
     setError(null);
     try {
       await signInWithEmailAndPassword(auth, email, password);
-      router.push("/dashboard");
+      router.push("/");
     } catch (err: any) {
       setError(err.message || "Failed to sign in");
     }
