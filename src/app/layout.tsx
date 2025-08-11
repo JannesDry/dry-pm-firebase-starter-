@@ -14,11 +14,7 @@ export const metadata = {
   description: 'Optometry Practice Management Software',
 };
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
       <body className={inter.className}>
@@ -39,7 +35,7 @@ export default function RootLayout({
 
                 {/* Right side */}
                 <div className="ml-auto flex items-center gap-4">
-                  {/* Shows 'Working in: Peacemed' + Switch button */}
+                  {/* Shows 'Working in: <Practice>' and a Switch button */}
                   <PracticeSwitcher />
                   <SignOutButton />
                 </div>
