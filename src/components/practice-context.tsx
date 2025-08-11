@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useEffect, useState } from 'react';
 import { db } from '@/lib/firebase';
-import { collection, getDocs, doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc } from 'firebase/firestore';
 import { useAuth } from './auth-provider';
 
 type Practice = { id: string; name: string };
@@ -28,14 +28,14 @@ function PracticeProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    let isCancelled = false;
+    let cancelled = false;
 
-    async function fetchPractices() {
+    async function load() {
       setLoading(true);
 
-      // Signed out: clear state
+      // Signed-out — clear everything
       if (!user) {
-        if (!isCancelled) {
+        if (!cancelled) {
           setPractices([]);
           setSelectedId(null);
           setLoading(false);
@@ -44,26 +44,32 @@ function PracticeProvider({ children }: { children: React.ReactNode }) {
       }
 
       try {
-        // 1) Get allowed practice ids from /users/{uid}
+        // 1) Read allowed practice IDs from /users/{uid}
         const uref = doc(db, 'users', user.uid);
         const usnap = await getDoc(uref);
         const allowedIds: string[] =
           usnap.exists() && Array.isArray(usnap.data()?.allowedPractices)
-            ? (usnap.data()?.allowedPractices as string[])
+            ? (usnap.data()!.allowedPractices as string[])
             : [];
 
-        // 2) Load all practices and filter to allowed
-        const psnap = await getDocs(collection(db, 'practices'));
-        const all = psnap.docs.map(d => ({ id: d.id, ...(d.data() as any) })) as Practice[];
-        const allowed = all.filter(p => allowedIds.includes(p.id));
+        // 2) Fetch ONLY those practice docs explicitly
+        const list: Practice[] = [];
+        for (const id of allowedIds) {
+          const psnap = await getDoc(doc(db, 'practices', id));
+          if (psnap.exists()) {
+            const data = psnap.data() as any;
+            list.push({ id: psnap.id, name: data.name ?? psnap.id });
+          }
+        }
 
-        if (isCancelled) return;
+        if (cancelled) return;
 
-        setPractices(allowed);
+        setPractices(list);
 
-        // 3) Restore saved selection ONLY if still allowed
-        const saved = typeof window !== 'undefined' ? localStorage.getItem('practiceId') : null;
-        if (saved && allowed.some(p => p.id === saved)) {
+        // 3) Restore saved selection only if still allowed
+        const saved =
+          typeof window !== 'undefined' ? localStorage.getItem('practiceId') : null;
+        if (saved && list.some(p => p.id === saved)) {
           setSelectedId(saved);
         } else {
           setSelectedId(null);
@@ -71,24 +77,22 @@ function PracticeProvider({ children }: { children: React.ReactNode }) {
       } catch (e) {
         console.error('Failed to load practices:', e);
       } finally {
-        if (!isCancelled) setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     }
 
-    fetchPractices();
+    load();
     return () => {
-      isCancelled = true;
+      cancelled = true;
     };
   }, [user]);
 
-  // Persist selection changes
+  // Persist selection
   useEffect(() => {
     if (typeof window === 'undefined') return;
     try {
       if (selectedId) localStorage.setItem('practiceId', selectedId);
-    } catch {
-      /* ignore storage errors */
-    }
+    } catch {}
   }, [selectedId]);
 
   return (
