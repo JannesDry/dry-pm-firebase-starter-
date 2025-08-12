@@ -4,8 +4,8 @@ import { useState } from "react";
 import PatientRegisterForm from "@/components/patients/PatientRegisterForm";
 import PatientListTable from "@/components/patients/PatientListTable";
 
-// Replace this with your real practice selector later
 const PRACTICES = [
+  { id: "__all__", name: "All practices" },
   { id: "peacemed", name: "Peacemed" },
   { id: "central", name: "Central Clinic" }
 ];
@@ -28,7 +28,7 @@ export default function PatientsPage() {
               <option key={p.id} value={p.id}>{p.name}</option>
             ))}
           </select>
-          <span className="text-xs text-slate-400">Scoped by practice</span>
+          <span className="text-xs text-slate-400">Switch to "All practices" to see legacy patients without a practiceId.</span>
         </div>
 
         <div className="flex gap-2">
@@ -58,7 +58,7 @@ export default function PatientsPage() {
           <div className="rounded-xl border border-slate-800 p-4">
             <h2 className="mb-2 font-medium">Register new patient</h2>
             <PatientRegisterForm
-              practiceId={practiceId}
+              practiceId={practiceId === "__all__" ? "peacemed" : practiceId}
               onSaved={() => setTab("find")}
             />
           </div>
