@@ -29,7 +29,6 @@ export type Patient = {
   createdAt?: any;
 };
 
-// Helpers
 const cleanPhone = (s?: string) => (s || "").replace(/\D/g, "");
 
 function norm(x: Partial<Patient>) {
@@ -43,12 +42,10 @@ function norm(x: Partial<Patient>) {
   };
 }
 
-// Subcollection ref: practices/{practiceId}/patients
 function patientsCollection(practiceId: string) {
   return collection(db, "practices", practiceId, "patients");
 }
 
-// Duplicate checks within a practice; fallback to collectionGroup
 export async function findDuplicates(candidate: Patient) {
   const c = norm(candidate);
   const results: any[] = [];
@@ -71,11 +68,7 @@ export async function findDuplicates(candidate: Patient) {
 
   // 2) same phone
   if (c.phone) {
-    const q2 = query(
-      scoped,
-      where("phone", "==", c.phone),
-      limit(10)
-    );
+    const q2 = query(scoped, where("phone", "==", c.phone), limit(10));
     results.push(...(await getDocs(q2)).docs.map(d => ({ id: d.id, ...d.data(), practiceId: candidate.practiceId })));
   }
 
@@ -91,17 +84,11 @@ export async function findDuplicates(candidate: Patient) {
     results.push(...(await getDocs(q3)).docs.map(d => ({ id: d.id, ...d.data(), practiceId: candidate.practiceId })));
   }
 
-  // If none found, final fallback across ALL practices (collectionGroup)
+  // If none found, global fallback across ALL practices (collectionGroup)
   if (results.length === 0) {
     const cg = collectionGroup(db, "patients");
     if (c.firstName && c.lastName && c.dob) {
-      const q1g = query(
-        cg,
-        where("firstName", "==", c.firstName),
-        where("lastName", "==", c.lastName),
-        where("dob", "==", c.dob),
-        limit(10)
-      );
+      const q1g = query(cg, where("firstName", "==", c.firstName), where("lastName", "==", c.lastName), where("dob", "==", c.dob), limit(10));
       results.push(...(await getDocs(q1g)).docs.map(d => ({ id: d.id, ...d.data() })));
     }
     if (c.phone) {
@@ -109,18 +96,11 @@ export async function findDuplicates(candidate: Patient) {
       results.push(...(await getDocs(q2g)).docs.map(d => ({ id: d.id, ...d.data() })));
     }
     if (c.email && c.firstName && c.lastName) {
-      const q3g = query(
-        cg,
-        where("email", "==", c.email),
-        where("firstName", "==", c.firstName),
-        where("lastName", "==", c.lastName),
-        limit(10)
-      );
+      const q3g = query(cg, where("email", "==", c.email), where("firstName", "==", c.firstName), where("lastName", "==", c.lastName), limit(10));
       results.push(...(await getDocs(q3g)).docs.map(d => ({ id: d.id, ...d.data() })));
     }
   }
 
-  // unique by (id + firstName + lastName + dob)
   const seen = new Set<string>();
   return results.filter((r) => {
     const key = `${r.id}-${r.firstName}-${r.lastName}-${r.dob}`;
@@ -130,31 +110,28 @@ export async function findDuplicates(candidate: Patient) {
   });
 }
 
-// List
 export async function listPatients(practiceId: string) {
   if (practiceId === "__all__") {
-    // Global list across all practices
+    // No orderBy to avoid index requirements; client-side sort by lastName, firstName.
     const cg = collectionGroup(db, "patients");
-    const qAll = query(cg, orderBy("firstName", "asc"), limit(1000));
-    const snapAll = await getDocs(qAll);
-    return snapAll.docs.map(d => ({ id: d.id, ...d.data() })) as Patient[];
+    const snapAll = await getDocs(query(cg, limit(2000)));
+    return snapAll.docs
+      .map(d => ({ id: d.id, ...d.data() }))
+      .sort((a: any, b: any) => {
+        const la = (a.lastName || "").localeCompare(b.lastName || "");
+        if (la !== 0) return la;
+        return (a.firstName || "").localeCompare(b.firstName || "");
+      }) as Patient[];
   }
 
-  // Scoped to one practice
-  const qScoped = query(
-    patientsCollection(practiceId),
-    orderBy("createdAt", "desc"),
-    limit(500)
-  );
+  const qScoped = query(patientsCollection(practiceId), orderBy("createdAt", "desc"), limit(500));
   const snap = await getDocs(qScoped);
   return snap.docs.map(d => ({ id: d.id, ...d.data(), practiceId })) as Patient[];
 }
 
-// Create
 export async function createPatient(data: Patient) {
   if (!data.practiceId) throw new Error("Missing practiceId");
 
-  // preflight duplicate check
   const dupes = await findDuplicates(data);
   if (dupes.length > 0) {
     const details = dupes.map(d => `${d.firstName} ${d.lastName} — DOB ${d.dob || "-"} — ${d.phone || d.email || ""}`).join("\n");
