@@ -1,4 +1,14 @@
-import { collection, addDoc, serverTimestamp, query, where, getDocs, orderBy, limit } from "firebase/firestore";
+import {
+  collection,
+  collectionGroup,
+  addDoc,
+  serverTimestamp,
+  query,
+  where,
+  getDocs,
+  orderBy,
+  limit
+} from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
 export type Patient = {
@@ -15,12 +25,11 @@ export type Patient = {
   medAidPlan?: string;
   memberNo?: string;
   dependentNo?: string;
-  practiceId?: string; // made optional for legacy docs
+  practiceId: string;
   createdAt?: any;
 };
 
-const patientsCol = collection(db, "patients");
-
+// Helpers
 const cleanPhone = (s?: string) => (s || "").replace(/\D/g, "");
 
 function norm(x: Partial<Patient>) {
@@ -34,89 +43,117 @@ function norm(x: Partial<Patient>) {
   };
 }
 
+// Subcollection ref: practices/{practiceId}/patients
+function patientsCollection(practiceId: string) {
+  return collection(db, "practices", practiceId, "patients");
+}
+
+// Duplicate checks within a practice; fallback to collectionGroup
 export async function findDuplicates(candidate: Patient) {
   const c = norm(candidate);
   const results: any[] = [];
 
-  // If legacy docs don't have practiceId, we still check without it as a very last resort.
-  const practiceFilter = candidate.practiceId ? [where("practiceId", "==", candidate.practiceId)] : [];
+  if (!candidate.practiceId) return [];
+
+  const scoped = patientsCollection(candidate.practiceId);
 
   // 1) exact name+surname+dob
   if (c.firstName && c.lastName && c.dob) {
-    const q1 = query(patientsCol,
+    const q1 = query(
+      scoped,
       where("firstName", "==", c.firstName),
       where("lastName", "==", c.lastName),
       where("dob", "==", c.dob),
-      ...practiceFilter,
       limit(10)
     );
-    results.push(...(await getDocs(q1)).docs.map(d => ({ id: d.id, ...d.data() })));
+    results.push(...(await getDocs(q1)).docs.map(d => ({ id: d.id, ...d.data(), practiceId: candidate.practiceId })));
   }
 
   // 2) same phone
   if (c.phone) {
-    const q2 = query(patientsCol,
+    const q2 = query(
+      scoped,
       where("phone", "==", c.phone),
-      ...practiceFilter,
       limit(10)
     );
-    results.push(...(await getDocs(q2)).docs.map(d => ({ id: d.id, ...d.data() })));
+    results.push(...(await getDocs(q2)).docs.map(d => ({ id: d.id, ...d.data(), practiceId: candidate.practiceId })));
   }
 
   // 3) same email with same full name
   if (c.email && c.firstName && c.lastName) {
-    const q3 = query(patientsCol,
+    const q3 = query(
+      scoped,
       where("email", "==", c.email),
       where("firstName", "==", c.firstName),
       where("lastName", "==", c.lastName),
-      ...practiceFilter,
       limit(10)
     );
-    results.push(...(await getDocs(q3)).docs.map(d => ({ id: d.id, ...d.data() })));
+    results.push(...(await getDocs(q3)).docs.map(d => ({ id: d.id, ...d.data(), practiceId: candidate.practiceId })));
   }
 
-  // de-dup array by id
+  // If none found, final fallback across ALL practices (collectionGroup)
+  if (results.length === 0) {
+    const cg = collectionGroup(db, "patients");
+    if (c.firstName && c.lastName && c.dob) {
+      const q1g = query(
+        cg,
+        where("firstName", "==", c.firstName),
+        where("lastName", "==", c.lastName),
+        where("dob", "==", c.dob),
+        limit(10)
+      );
+      results.push(...(await getDocs(q1g)).docs.map(d => ({ id: d.id, ...d.data() })));
+    }
+    if (c.phone) {
+      const q2g = query(cg, where("phone", "==", c.phone), limit(10));
+      results.push(...(await getDocs(q2g)).docs.map(d => ({ id: d.id, ...d.data() })));
+    }
+    if (c.email && c.firstName && c.lastName) {
+      const q3g = query(
+        cg,
+        where("email", "==", c.email),
+        where("firstName", "==", c.firstName),
+        where("lastName", "==", c.lastName),
+        limit(10)
+      );
+      results.push(...(await getDocs(q3g)).docs.map(d => ({ id: d.id, ...d.data() })));
+    }
+  }
+
+  // unique by (id + firstName + lastName + dob)
   const seen = new Set<string>();
-  const uniq = results.filter((r) => {
-    if (seen.has(r.id)) return false;
-    seen.add(r.id);
+  return results.filter((r) => {
+    const key = `${r.id}-${r.firstName}-${r.lastName}-${r.dob}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
     return true;
   });
-
-  if (uniq.length === 0 && practiceFilter.length) {
-    // Final legacy fallback: try again without practice scope
-    return findDuplicates({ ...candidate, practiceId: undefined } as Patient);
-  }
-
-  return uniq;
 }
 
+// List
 export async function listPatients(practiceId: string) {
-  // If "__all__", show all patients (legacy + new). Keep order simple to avoid index needs.
   if (practiceId === "__all__") {
-    const qAll = query(patientsCol, orderBy("firstName", "asc"), limit(1000));
+    // Global list across all practices
+    const cg = collectionGroup(db, "patients");
+    const qAll = query(cg, orderBy("firstName", "asc"), limit(1000));
     const snapAll = await getDocs(qAll);
     return snapAll.docs.map(d => ({ id: d.id, ...d.data() })) as Patient[];
   }
 
-  // Try scoped by practiceId first (new schema)
+  // Scoped to one practice
   const qScoped = query(
-    patientsCol,
-    where("practiceId", "==", practiceId),
+    patientsCollection(practiceId),
     orderBy("createdAt", "desc"),
     limit(500)
   );
-  const snapScoped = await getDocs(qScoped);
-  const data = snapScoped.docs.map(d => ({ id: d.id, ...d.data() })) as Patient[];
-  if (data.length > 0) return data;
-
-  // Legacy fallback (no practiceId field)
-  const qLegacy = query(patientsCol, orderBy("firstName", "asc"), limit(1000));
-  const snapLegacy = await getDocs(qLegacy);
-  return snapLegacy.docs.map(d => ({ id: d.id, ...d.data() })) as Patient[];
+  const snap = await getDocs(qScoped);
+  return snap.docs.map(d => ({ id: d.id, ...d.data(), practiceId })) as Patient[];
 }
 
+// Create
 export async function createPatient(data: Patient) {
+  if (!data.practiceId) throw new Error("Missing practiceId");
+
   // preflight duplicate check
   const dupes = await findDuplicates(data);
   if (dupes.length > 0) {
@@ -134,5 +171,5 @@ export async function createPatient(data: Patient) {
     createdAt: serverTimestamp()
   };
 
-  await addDoc(patientsCol, toSave as any);
+  await addDoc(patientsCollection(data.practiceId), toSave as any);
 }

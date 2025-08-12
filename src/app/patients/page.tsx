@@ -6,8 +6,8 @@ import PatientListTable from "@/components/patients/PatientListTable";
 
 const PRACTICES = [
   { id: "__all__", name: "All practices" },
-  { id: "peacemed", name: "Peacemed" },
-  { id: "central", name: "Central Clinic" }
+  { id: "p1", name: "Practice p1" },
+  { id: "p2", name: "Practice p2" }
 ];
 
 export default function PatientsPage() {
@@ -28,7 +28,7 @@ export default function PatientsPage() {
               <option key={p.id} value={p.id}>{p.name}</option>
             ))}
           </select>
-          <span className="text-xs text-slate-400">Switch to "All practices" to see legacy patients without a practiceId.</span>
+          <span className="text-xs text-slate-400">Data path: practices/&lt;practiceId&gt;/patients</span>
         </div>
 
         <div className="flex gap-2">
@@ -58,7 +58,7 @@ export default function PatientsPage() {
           <div className="rounded-xl border border-slate-800 p-4">
             <h2 className="mb-2 font-medium">Register new patient</h2>
             <PatientRegisterForm
-              practiceId={practiceId === "__all__" ? "peacemed" : practiceId}
+              practiceId={practiceId === "__all__" ? "p1" : practiceId}
               onSaved={() => setTab("find")}
             />
           </div>
