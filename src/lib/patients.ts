@@ -15,7 +15,7 @@ export type Patient = {
   medAidPlan?: string;
   memberNo?: string;
   dependentNo?: string;
-  practiceId: string;
+  practiceId?: string; // made optional for legacy docs
   createdAt?: any;
 };
 
@@ -38,13 +38,16 @@ export async function findDuplicates(candidate: Patient) {
   const c = norm(candidate);
   const results: any[] = [];
 
+  // If legacy docs don't have practiceId, we still check without it as a very last resort.
+  const practiceFilter = candidate.practiceId ? [where("practiceId", "==", candidate.practiceId)] : [];
+
   // 1) exact name+surname+dob
   if (c.firstName && c.lastName && c.dob) {
     const q1 = query(patientsCol,
       where("firstName", "==", c.firstName),
       where("lastName", "==", c.lastName),
       where("dob", "==", c.dob),
-      where("practiceId", "==", candidate.practiceId),
+      ...practiceFilter,
       limit(10)
     );
     results.push(...(await getDocs(q1)).docs.map(d => ({ id: d.id, ...d.data() })));
@@ -54,7 +57,7 @@ export async function findDuplicates(candidate: Patient) {
   if (c.phone) {
     const q2 = query(patientsCol,
       where("phone", "==", c.phone),
-      where("practiceId", "==", candidate.practiceId),
+      ...practiceFilter,
       limit(10)
     );
     results.push(...(await getDocs(q2)).docs.map(d => ({ id: d.id, ...d.data() })));
@@ -66,7 +69,7 @@ export async function findDuplicates(candidate: Patient) {
       where("email", "==", c.email),
       where("firstName", "==", c.firstName),
       where("lastName", "==", c.lastName),
-      where("practiceId", "==", candidate.practiceId),
+      ...practiceFilter,
       limit(10)
     );
     results.push(...(await getDocs(q3)).docs.map(d => ({ id: d.id, ...d.data() })));
@@ -74,22 +77,43 @@ export async function findDuplicates(candidate: Patient) {
 
   // de-dup array by id
   const seen = new Set<string>();
-  return results.filter((r) => {
+  const uniq = results.filter((r) => {
     if (seen.has(r.id)) return false;
     seen.add(r.id);
     return true;
   });
+
+  if (uniq.length === 0 && practiceFilter.length) {
+    // Final legacy fallback: try again without practice scope
+    return findDuplicates({ ...candidate, practiceId: undefined } as Patient);
+  }
+
+  return uniq;
 }
 
 export async function listPatients(practiceId: string) {
-  const qx = query(
+  // If "__all__", show all patients (legacy + new). Keep order simple to avoid index needs.
+  if (practiceId === "__all__") {
+    const qAll = query(patientsCol, orderBy("firstName", "asc"), limit(1000));
+    const snapAll = await getDocs(qAll);
+    return snapAll.docs.map(d => ({ id: d.id, ...d.data() })) as Patient[];
+  }
+
+  // Try scoped by practiceId first (new schema)
+  const qScoped = query(
     patientsCol,
     where("practiceId", "==", practiceId),
     orderBy("createdAt", "desc"),
     limit(500)
   );
-  const snap = await getDocs(qx);
-  return snap.docs.map(d => ({ id: d.id, ...d.data() })) as Patient[];
+  const snapScoped = await getDocs(qScoped);
+  const data = snapScoped.docs.map(d => ({ id: d.id, ...d.data() })) as Patient[];
+  if (data.length > 0) return data;
+
+  // Legacy fallback (no practiceId field)
+  const qLegacy = query(patientsCol, orderBy("firstName", "asc"), limit(1000));
+  const snapLegacy = await getDocs(qLegacy);
+  return snapLegacy.docs.map(d => ({ id: d.id, ...d.data() })) as Patient[];
 }
 
 export async function createPatient(data: Patient) {
@@ -102,8 +126,8 @@ export async function createPatient(data: Patient) {
 
   const toSave: Patient = {
     ...data,
-    firstName: data.firstName.trim().toLowerCase(),
-    lastName: data.lastName.trim().toLowerCase(),
+    firstName: (data.firstName || "").trim().toLowerCase(),
+    lastName: (data.lastName || "").trim().toLowerCase(),
     dob: (data.dob || "").trim(),
     phone: cleanPhone(data.phone),
     email: (data.email || "").trim().toLowerCase(),
