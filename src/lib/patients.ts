@@ -6,7 +6,10 @@ import {
   where,
   getDocs,
   orderBy,
-  limit
+  limit,
+  doc,
+  getDoc,
+  updateDoc
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
@@ -45,13 +48,32 @@ function patientsCollection(practiceId: string) {
   return collection(db, "practices", practiceId, "patients");
 }
 
+function patientDoc(practiceId: string, patientId: string) {
+  return doc(db, "practices", practiceId, "patients", patientId);
+}
+
+export async function getPatient(practiceId: string, patientId: string) {
+  const d = await getDoc(patientDoc(practiceId, patientId));
+  if (!d.exists()) return null;
+  return { id: d.id, ...d.data(), practiceId } as Patient;
+}
+
+export async function updatePatient(practiceId: string, patientId: string, updates: Partial<Patient>) {
+  const cleaned: any = { ...updates };
+  if (cleaned.firstName) cleaned.firstName = String(cleaned.firstName).trim().toLowerCase();
+  if (cleaned.lastName) cleaned.lastName = String(cleaned.lastName).trim().toLowerCase();
+  if (cleaned.dob) cleaned.dob = String(cleaned.dob).trim();
+  if (cleaned.phone) cleaned.phone = cleanPhone(cleaned.phone);
+  if (cleaned.email) cleaned.email = String(cleaned.email).trim().toLowerCase();
+  await updateDoc(patientDoc(practiceId, patientId), cleaned);
+}
+
 export async function findDuplicates(candidate: Patient) {
   if (!candidate.practiceId) return [];
   const c = norm(candidate);
   const scoped = patientsCollection(candidate.practiceId);
   const results: any[] = [];
 
-  // 1) exact name+surname+dob
   if (c.firstName && c.lastName && c.dob) {
     const q1 = query(
       scoped,
@@ -62,12 +84,10 @@ export async function findDuplicates(candidate: Patient) {
     );
     results.push(...(await getDocs(q1)).docs.map(d => ({ id: d.id, ...d.data(), practiceId: candidate.practiceId })));
   }
-  // 2) same phone
   if (c.phone) {
     const q2 = query(scoped, where("phone", "==", c.phone), limit(10));
     results.push(...(await getDocs(q2)).docs.map(d => ({ id: d.id, ...d.data(), practiceId: candidate.practiceId })));
   }
-  // 3) same email with same full name
   if (c.email && c.firstName && c.lastName) {
     const q3 = query(
       scoped,
@@ -79,7 +99,6 @@ export async function findDuplicates(candidate: Patient) {
     results.push(...(await getDocs(q3)).docs.map(d => ({ id: d.id, ...d.data(), practiceId: candidate.practiceId })));
   }
 
-  // unique by id
   const seen = new Set<string>();
   return results.filter((r) => {
     if (seen.has(r.id)) return false;
@@ -101,9 +120,9 @@ export async function listPatients(practiceId: string) {
 
 export async function createPatient(data: Patient) {
   if (!data.practiceId) throw new Error("Select a practice first.");
-  const dupes = await findDuplicates(data);
-  if (dupes.length > 0) {
-    const details = dupes.map(d => `${d.firstName} ${d.lastName} — DOB ${d.dob || "-"} — ${d.phone || d.email || ""}`).join("\n");
+  const cands = await findDuplicates(data);
+  if (cands.length > 0) {
+    const details = cands.map(d => `${d.firstName} ${d.lastName} — DOB ${d.dob || "-"} — ${d.phone || d.email || ""}`).join("\n");
     throw new Error(`Potential duplicate(s) found:\n${details}`);
   }
   const toSave: Patient = {

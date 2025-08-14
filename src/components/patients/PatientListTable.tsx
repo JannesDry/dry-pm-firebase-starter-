@@ -1,49 +1,67 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { listPatients, Patient } from "@/lib/patients";
+import { listPatients, Patient, updatePatient } from "@/lib/patients";
 
-type Props = {
-  practiceId: string;
-};
+type Props = { practiceId: string };
 
-const inputCls = "w-80 max-w-full border border-gray-300 rounded px-3 py-2 bg-white text-black";
+const inputCls = "w-full border border-gray-300 rounded px-3 py-2 bg-white text-black";
+const selectCls = "w-full border border-gray-300 rounded px-3 py-2 bg-white text-black";
 
 export default function PatientListTable({ practiceId }: Props) {
   const [rows, setRows] = useState<Patient[]>([]);
   const [q, setQ] = useState("");
+  const [editing, setEditing] = useState<Patient | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
 
-  useEffect(() => {
+  async function refresh() {
     if (!practiceId) { setRows([]); return; }
-    (async () => {
-      const data = await listPatients(practiceId);
-      setRows(data);
-    })();
-  }, [practiceId]);
+    const data = await listPatients(practiceId);
+    setRows(data);
+  }
+
+  useEffect(() => { refresh(); }, [practiceId]);
 
   if (!practiceId) {
-    return <div className="text-sm text-gray-700">Select a practice above to view patients.</div>;
+    return <div className="text-sm text-gray-700">Select a practice above to find patients.</div>;
   }
 
   const filtered = rows.filter((p) => {
     const s = q.trim().toLowerCase();
     if (!s) return true;
-    return [
-      p.firstName, p.lastName, p.phone, p.email, p.memberNo
-    ].some(v => (v || "").toLowerCase().includes(s)) || (p.dob || "").includes(s);
+    return [p.firstName, p.lastName, p.phone, p.email, p.memberNo].some(v => (v || "").toLowerCase().includes(s)) || (p.dob || "").includes(s);
   });
+
+  async function handleSaveEdit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!editing?.id) return;
+    setSaving(true);
+    setErr(null);
+    try {
+      const { id, practiceId: pid, ...rest } = editing;
+      await updatePatient(practiceId, id, rest);
+      setEditing(null);
+      await refresh();
+    } catch (e: any) {
+      setErr(e.message || "Failed to update patient.");
+    } finally {
+      setSaving(false);
+    }
+  }
 
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-3">
         <input
-          placeholder="Search name, mobile, email, member no., DOB..."
-          className={inputCls}
+          placeholder="Find patient by name, mobile, email, member no., DOB..."
+          className={inputCls + " w-80 max-w-full"}
           value={q}
           onChange={(e) => setQ(e.target.value)}
         />
         <span className="text-xs text-gray-700">{filtered.length} / {rows.length} patients</span>
       </div>
+
       <div className="overflow-x-auto rounded border bg-white text-black">
         <table className="min-w-full text-sm">
           <thead>
@@ -54,7 +72,7 @@ export default function PatientListTable({ practiceId }: Props) {
               <th className="p-2">Email</th>
               <th className="p-2">Payer</th>
               <th className="p-2">Visit</th>
-              <th className="p-2">Created</th>
+              <th className="p-2">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -64,9 +82,11 @@ export default function PatientListTable({ practiceId }: Props) {
                 <td className="p-2">{p.dob || "-"}</td>
                 <td className="p-2">{p.phone || "-"}</td>
                 <td className="p-2">{p.email || "-"}</td>
-                <td className="p-2"><span className="rounded border px-2 py-0.5 text-xs bg-white text-black">{p.payer}</span></td>
+                <td className="p-2">{p.payer}</td>
                 <td className="p-2">{p.visitType}</td>
-                <td className="p-2 text-gray-700">{/* createdAt optional */}</td>
+                <td className="p-2">
+                  <button className="rounded border px-2 py-1" onClick={() => setEditing(p)}>Edit</button>
+                </td>
               </tr>
             ))}
             {filtered.length === 0 && (
@@ -75,6 +95,84 @@ export default function PatientListTable({ practiceId }: Props) {
           </tbody>
         </table>
       </div>
+
+      {editing && (
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center">
+          <div className="bg-white text-black rounded-lg border w-full max-w-2xl p-4">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="font-semibold">Edit patient</h3>
+              <button className="border rounded px-2 py-1" onClick={() => setEditing(null)}>Close</button>
+            </div>
+            <form onSubmit={handleSaveEdit} className="space-y-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-gray-700">First name</label>
+                  <input className={inputCls} value={editing.firstName} onChange={e => setEditing({ ...editing, firstName: e.target.value })} required />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-700">Last name</label>
+                  <input className={inputCls} value={editing.lastName} onChange={e => setEditing({ ...editing, lastName: e.target.value })} required />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-700">Date of birth</label>
+                  <input type="date" className={inputCls} value={editing.dob} onChange={e => setEditing({ ...editing, dob: e.target.value })} required />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-700">Mobile</label>
+                  <input className={inputCls} value={editing.phone || ""} onChange={e => setEditing({ ...editing, phone: e.target.value })} />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-700">Email</label>
+                  <input type="email" className={inputCls} value={editing.email || ""} onChange={e => setEditing({ ...editing, email: e.target.value })} />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-700">Visit type</label>
+                  <select className={selectCls} value={editing.visitType || "new"} onChange={e => setEditing({ ...editing, visitType: e.target.value as any })}>
+                    <option value="new">New</option>
+                    <option value="returning">Returning</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs text-gray-700">Patient type</label>
+                  <select className={selectCls} value={editing.payer || "private"} onChange={e => setEditing({ ...editing, payer: e.target.value as any })}>
+                    <option value="private">Private</option>
+                    <option value="medical">Medical aid</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs text-gray-700">Address</label>
+                  <input className={inputCls} value={editing.address || ""} onChange={e => setEditing({ ...editing, address: e.target.value })} />
+                </div>
+                {editing.payer === "medical" && (
+                  <>
+                    <div>
+                      <label className="text-xs text-gray-700">Medical aid name</label>
+                      <input className={inputCls} value={editing.medAidName || ""} onChange={e => setEditing({ ...editing, medAidName: e.target.value })} />
+                    </div>
+                    <div>
+                      <label className="text-xs text-gray-700">Medical aid plan</label>
+                      <input className={inputCls} value={editing.medAidPlan || ""} onChange={e => setEditing({ ...editing, medAidPlan: e.target.value })} />
+                    </div>
+                    <div>
+                      <label className="text-xs text-gray-700">Member number</label>
+                      <input className={inputCls} value={editing.memberNo || ""} onChange={e => setEditing({ ...editing, memberNo: e.target.value })} />
+                    </div>
+                    <div>
+                      <label className="text-xs text-gray-700">Dependent number</label>
+                      <input className={inputCls} value={editing.dependentNo || ""} onChange={e => setEditing({ ...editing, dependentNo: e.target.value })} />
+                    </div>
+                  </>
+                )}
+              </div>
+              <div className="flex gap-2">
+                <button type="button" className="rounded border px-3 py-2" onClick={() => setEditing(null)}>Cancel</button>
+                <button type="submit" disabled={saving} className="rounded border px-4 py-2">{saving ? "Saving..." : "Save changes"}</button>
+              </div>
+              {err && <p className="text-sm text-amber-700">{err}</p>}
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

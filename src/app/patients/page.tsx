@@ -32,7 +32,7 @@ export default function PatientsPage() {
               <option key={p.id} value={p.id}>{p.name}</option>
             ))}
           </select>
-          <span className="text-xs text-gray-700">Data path: practices/&lt;practiceId&gt;/patients</span>
+          <span className="text-xs text-gray-700">Data: practices/&lt;practiceId&gt;/patients</span>
         </div>
 
         <div className="flex gap-2">
@@ -40,7 +40,7 @@ export default function PatientsPage() {
             className={`rounded border px-3 py-1.5 bg-white text-black`}
             onClick={() => setTab("find")}
           >
-            Find / View
+            Find
           </button>
           <button
             className={`rounded border px-3 py-1.5 bg-white text-black`}
