@@ -9,6 +9,5 @@ export async function listPractices(): Promise<Practice[]> {
     const data = d.data() as any;
     return { id: d.id, name: data?.name || d.id } as Practice;
   });
-  // stable sort by name
   return rows.sort((a, b) => a.name.localeCompare(b.name));
 }

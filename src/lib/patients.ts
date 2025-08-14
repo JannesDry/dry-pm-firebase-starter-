@@ -1,6 +1,5 @@
 import {
   collection,
-  collectionGroup,
   addDoc,
   serverTimestamp,
   query,
@@ -47,12 +46,10 @@ function patientsCollection(practiceId: string) {
 }
 
 export async function findDuplicates(candidate: Patient) {
-  const c = norm(candidate);
-  const results: any[] = [];
-
   if (!candidate.practiceId) return [];
-
+  const c = norm(candidate);
   const scoped = patientsCollection(candidate.practiceId);
+  const results: any[] = [];
 
   // 1) exact name+surname+dob
   if (c.firstName && c.lastName && c.dob) {
@@ -65,13 +62,11 @@ export async function findDuplicates(candidate: Patient) {
     );
     results.push(...(await getDocs(q1)).docs.map(d => ({ id: d.id, ...d.data(), practiceId: candidate.practiceId })));
   }
-
   // 2) same phone
   if (c.phone) {
     const q2 = query(scoped, where("phone", "==", c.phone), limit(10));
     results.push(...(await getDocs(q2)).docs.map(d => ({ id: d.id, ...d.data(), practiceId: candidate.practiceId })));
   }
-
   // 3) same email with same full name
   if (c.email && c.firstName && c.lastName) {
     const q3 = query(
@@ -84,60 +79,33 @@ export async function findDuplicates(candidate: Patient) {
     results.push(...(await getDocs(q3)).docs.map(d => ({ id: d.id, ...d.data(), practiceId: candidate.practiceId })));
   }
 
-  // If none found, global fallback across ALL practices (collectionGroup)
-  if (results.length === 0) {
-    const cg = collectionGroup(db, "patients");
-    if (c.firstName && c.lastName && c.dob) {
-      const q1g = query(cg, where("firstName", "==", c.firstName), where("lastName", "==", c.lastName), where("dob", "==", c.dob), limit(10));
-      results.push(...(await getDocs(q1g)).docs.map(d => ({ id: d.id, ...d.data() })));
-    }
-    if (c.phone) {
-      const q2g = query(cg, where("phone", "==", c.phone), limit(10));
-      results.push(...(await getDocs(q2g)).docs.map(d => ({ id: d.id, ...d.data() })));
-    }
-    if (c.email && c.firstName && c.lastName) {
-      const q3g = query(cg, where("email", "==", c.email), where("firstName", "==", c.firstName), where("lastName", "==", c.lastName), limit(10));
-      results.push(...(await getDocs(q3g)).docs.map(d => ({ id: d.id, ...d.data() })));
-    }
-  }
-
+  // unique by id
   const seen = new Set<string>();
   return results.filter((r) => {
-    const key = `${r.id}-${r.firstName}-${r.lastName}-${r.dob}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
+    if (seen.has(r.id)) return false;
+    seen.add(r.id);
     return true;
   });
 }
 
 export async function listPatients(practiceId: string) {
-  if (practiceId === "__all__") {
-    // No orderBy to avoid index requirements; client-side sort by lastName, firstName.
-    const cg = collectionGroup(db, "patients");
-    const snapAll = await getDocs(query(cg, limit(2000)));
-    return snapAll.docs
-      .map(d => ({ id: d.id, ...d.data() }))
-      .sort((a: any, b: any) => {
-        const la = (a.lastName || "").localeCompare(b.lastName || "");
-        if (la !== 0) return la;
-        return (a.firstName || "").localeCompare(b.firstName || "");
-      }) as Patient[];
-  }
-
-  const qScoped = query(patientsCollection(practiceId), orderBy("createdAt", "desc"), limit(500));
+  if (!practiceId) return [];
+  const qScoped = query(
+    patientsCollection(practiceId),
+    orderBy("createdAt", "desc"),
+    limit(500)
+  );
   const snap = await getDocs(qScoped);
   return snap.docs.map(d => ({ id: d.id, ...d.data(), practiceId })) as Patient[];
 }
 
 export async function createPatient(data: Patient) {
-  if (!data.practiceId) throw new Error("Missing practiceId");
-
+  if (!data.practiceId) throw new Error("Select a practice first.");
   const dupes = await findDuplicates(data);
   if (dupes.length > 0) {
     const details = dupes.map(d => `${d.firstName} ${d.lastName} — DOB ${d.dob || "-"} — ${d.phone || d.email || ""}`).join("\n");
     throw new Error(`Potential duplicate(s) found:\n${details}`);
   }
-
   const toSave: Patient = {
     ...data,
     firstName: (data.firstName || "").trim().toLowerCase(),
@@ -147,6 +115,5 @@ export async function createPatient(data: Patient) {
     email: (data.email || "").trim().toLowerCase(),
     createdAt: serverTimestamp()
   };
-
   await addDoc(patientsCollection(data.practiceId), toSave as any);
 }

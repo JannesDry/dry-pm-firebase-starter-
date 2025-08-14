@@ -7,7 +7,7 @@ import { listPractices, type Practice } from "@/lib/practices";
 
 export default function PatientsPage() {
   const [practices, setPractices] = useState<Practice[]>([]);
-  const [practiceId, setPracticeId] = useState<string>("__all__");
+  const [practiceId, setPracticeId] = useState<string>(""); // must be selected
   const [tab, setTab] = useState<"find" | "register">("find");
 
   useEffect(() => {
@@ -25,25 +25,25 @@ export default function PatientsPage() {
           <select
             value={practiceId}
             onChange={(e) => setPracticeId(e.target.value)}
-            /* Plain select: no custom colors */
+            className="border rounded px-3 py-2 bg-white text-black"
           >
-            <option value="__all__">All practices</option>
+            <option value="">Select a practice…</option>
             {practices.map((p) => (
               <option key={p.id} value={p.id}>{p.name}</option>
             ))}
           </select>
-          <span className="text-xs text-slate-500">Data path: practices/&lt;practiceId&gt;/patients</span>
+          <span className="text-xs text-gray-700">Data path: practices/&lt;practiceId&gt;/patients</span>
         </div>
 
         <div className="flex gap-2">
           <button
-            className={`rounded border px-3 py-1.5 ${tab === "find" ? "" : ""}`}
+            className={`rounded border px-3 py-1.5 bg-white text-black`}
             onClick={() => setTab("find")}
           >
             Find / View
           </button>
           <button
-            className={`rounded border px-3 py-1.5 ${tab === "register" ? "" : ""}`}
+            className={`rounded border px-3 py-1.5 bg-white text-black`}
             onClick={() => setTab("register")}
           >
             Register
@@ -52,27 +52,19 @@ export default function PatientsPage() {
       </div>
 
       {tab === "find" && (
-        <div className="rounded-xl border border-slate-300/20 p-4">
+        <div className="rounded border p-4 bg-white text-black">
           <PatientListTable practiceId={practiceId} />
         </div>
       )}
 
       {tab === "register" && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="rounded-xl border border-slate-300/20 p-4">
-            <h2 className="mb-2 font-medium">Register new patient</h2>
-            <PatientRegisterForm
-              practiceId={practiceId === "__all__" ? (practices[0]?.id || "") : practiceId}
-              onSaved={() => setTab("find")}
-            />
-          </div>
-
-          <div className="rounded-xl border border-slate-300/20 p-4">
-            <h2 className="mb-2 font-medium">Duplicate check</h2>
-            <p className="text-xs text-slate-500">
-              Duplicates are detected automatically on save. You can also use “Check duplicates” in the form to preview potential matches.
-            </p>
-          </div>
+        <div className="rounded border p-4 bg-white text-black">
+          <h2 className="mb-2 font-medium">Register new patient</h2>
+          <PatientRegisterForm
+            practiceId={practiceId}
+            onSaved={() => setTab("find")}
+          />
+          {!practiceId && <p className="text-xs text-gray-700 mt-2">Select a practice to enable the form.</p>}
         </div>
       )}
     </div>
