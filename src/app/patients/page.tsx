@@ -32,18 +32,18 @@ export default function PatientsPage() {
               <option key={p.id} value={p.id}>{p.name}</option>
             ))}
           </select>
-          <span className="text-xs text-gray-700">Data: practices/&lt;practiceId&gt;/patients</span>
+          <span className="text-xs text-gray-700">Data path: practices/&lt;practiceId&gt;/patients</span>
         </div>
 
         <div className="flex gap-2">
           <button
-            className={`rounded border px-3 py-1.5 bg-white text-black`}
+            className="rounded border px-3 py-1.5 bg-white text-black"
             onClick={() => setTab("find")}
           >
             Find
           </button>
           <button
-            className={`rounded border px-3 py-1.5 bg-white text-black`}
+            className="rounded border px-3 py-1.5 bg-white text-black"
             onClick={() => setTab("register")}
           >
             Register
@@ -60,10 +60,7 @@ export default function PatientsPage() {
       {tab === "register" && (
         <div className="rounded border p-4 bg-white text-black">
           <h2 className="mb-2 font-medium">Register new patient</h2>
-          <PatientRegisterForm
-            practiceId={practiceId}
-            onSaved={() => setTab("find")}
-          />
+          <PatientRegisterForm practiceId={practiceId} onSaved={() => setTab("find")} />
           {!practiceId && <p className="text-xs text-gray-700 mt-2">Select a practice to enable the form.</p>}
         </div>
       )}

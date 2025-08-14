@@ -3,13 +3,9 @@
 import { useState } from "react";
 import { createPatient, findDuplicates, Patient } from "@/lib/patients";
 
-type Props = {
-  practiceId: string; // must be selected in parent
-  onSaved?: () => void;
-};
+type Props = { practiceId: string; onSaved?: () => void; };
 
 const inputCls = "w-full border border-gray-300 rounded px-3 py-2 bg-white text-black";
-const selectCls = "w-full border border-gray-300 rounded px-3 py-2 bg-white text-black";
 
 export default function PatientRegisterForm({ practiceId, onSaved }: Props) {
   const disabled = !practiceId;
@@ -27,7 +23,7 @@ export default function PatientRegisterForm({ practiceId, onSaved }: Props) {
     medAidPlan: "",
     memberNo: "",
     dependentNo: "",
-    practiceId: "" // set from prop at submit
+    practiceId: ""
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -57,19 +53,9 @@ export default function PatientRegisterForm({ practiceId, onSaved }: Props) {
       await createPatient({ ...form, practiceId });
       onSaved?.();
       setForm({
-        firstName: "",
-        lastName: "",
-        dob: "",
-        phone: "",
-        email: "",
-        address: "",
-        visitType: "new",
-        payer: "private",
-        medAidName: "",
-        medAidPlan: "",
-        memberNo: "",
-        dependentNo: "",
-        practiceId: ""
+        ...form,
+        firstName: "", lastName: "", dob: "", phone: "", email: "",
+        address: "", memberNo: "", dependentNo: ""
       });
       setDupes([]);
     } catch (e: any) {
@@ -109,7 +95,7 @@ export default function PatientRegisterForm({ practiceId, onSaved }: Props) {
         </div>
         <div>
           <label className="text-xs text-gray-700">Visit type</label>
-          <select className={selectCls} disabled={disabled}
+          <select className={inputCls} disabled={disabled}
                   value={form.visitType} onChange={e => set("visitType", e.target.value)}>
             <option value="new">New</option>
             <option value="returning">Returning</option>
@@ -117,7 +103,7 @@ export default function PatientRegisterForm({ practiceId, onSaved }: Props) {
         </div>
         <div>
           <label className="text-xs text-gray-700">Patient type</label>
-          <select className={selectCls} disabled={disabled}
+          <select className={inputCls} disabled={disabled}
                   value={form.payer} onChange={e => set("payer", e.target.value)}>
             <option value="private">Private</option>
             <option value="medical">Medical aid</option>
@@ -128,27 +114,28 @@ export default function PatientRegisterForm({ practiceId, onSaved }: Props) {
           <input className={inputCls} disabled={disabled}
                  value={form.address || ""} onChange={e => set("address", e.target.value)} />
         </div>
+
         {form.payer === "medical" && !disabled && (
           <>
             <div>
               <label className="text-xs text-gray-700">Medical aid name</label>
               <input className={inputCls}
-                    value={form.medAidName || ""} onChange={e => set("medAidName", e.target.value)} required />
+                     value={form.medAidName || ""} onChange={e => set("medAidName", e.target.value)} required />
             </div>
             <div>
               <label className="text-xs text-gray-700">Medical aid plan</label>
               <input className={inputCls}
-                    value={form.medAidPlan || ""} onChange={e => set("medAidPlan", e.target.value)} required />
+                     value={form.medAidPlan || ""} onChange={e => set("medAidPlan", e.target.value)} required />
             </div>
             <div>
               <label className="text-xs text-gray-700">Member number</label>
               <input className={inputCls}
-                    value={form.memberNo || ""} onChange={e => set("memberNo", e.target.value)} required />
+                     value={form.memberNo || ""} onChange={e => set("memberNo", e.target.value)} required />
             </div>
             <div>
               <label className="text-xs text-gray-700">Dependent number</label>
               <input className={inputCls}
-                    value={form.dependentNo || ""} onChange={e => set("dependentNo", e.target.value)} required />
+                     value={form.dependentNo || ""} onChange={e => set("dependentNo", e.target.value)} required />
             </div>
           </>
         )}
@@ -156,17 +143,17 @@ export default function PatientRegisterForm({ practiceId, onSaved }: Props) {
 
       <div className="flex gap-2">
         <button type="button" onClick={handleCheckDupes} disabled={disabled}
-                className="rounded border px-3 py-2">
+                className="rounded border px-3 py-2 bg-white text-black">
           Check duplicates
         </button>
         <button type="submit" disabled={disabled || saving}
-                className="rounded border px-4 py-2">
+                className="rounded border px-4 py-2 bg-white text-black">
           {saving ? "Saving..." : "Save patient"}
         </button>
       </div>
 
       {disabled && <p className="text-xs text-gray-700">Select a practice above to enable registration.</p>}
-      {error && <p className="text-sm text-amber-700 whitespace-pre-wrap">{error}</p>}
+      {error && <p className="text-sm text-red-700 whitespace-pre-wrap">{error}</p>}
 
       {dupes.length > 0 && (
         <div className="mt-3 border rounded p-3 bg-white text-black">

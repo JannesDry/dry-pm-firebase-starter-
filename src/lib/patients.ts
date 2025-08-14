@@ -29,9 +29,17 @@ export type Patient = {
   dependentNo?: string;
   practiceId: string;
   createdAt?: any;
+  firstNameLower?: string;
+  lastNameLower?: string;
 };
 
 const cleanPhone = (s?: string) => (s || "").replace(/\D/g, "");
+
+// Basic Title Case (per word). We can enhance later for "van der" etc.
+const toTitleCase = (str?: string) =>
+  (str || "")
+    .toLowerCase()
+    .replace(/\b\w/g, (ch) => ch.toUpperCase());
 
 function norm(x: Partial<Patient>) {
   const lower = (s?: string) => (s || "").trim().toLowerCase();
@@ -40,32 +48,12 @@ function norm(x: Partial<Patient>) {
     lastName: lower(x.lastName),
     dob: (x.dob || "").trim(),
     phone: cleanPhone(x.phone),
-    email: lower(x.email)
+    email: lower(x.email),
   };
 }
 
 function patientsCollection(practiceId: string) {
   return collection(db, "practices", practiceId, "patients");
-}
-
-function patientDoc(practiceId: string, patientId: string) {
-  return doc(db, "practices", practiceId, "patients", patientId);
-}
-
-export async function getPatient(practiceId: string, patientId: string) {
-  const d = await getDoc(patientDoc(practiceId, patientId));
-  if (!d.exists()) return null;
-  return { id: d.id, ...d.data(), practiceId } as Patient;
-}
-
-export async function updatePatient(practiceId: string, patientId: string, updates: Partial<Patient>) {
-  const cleaned: any = { ...updates };
-  if (cleaned.firstName) cleaned.firstName = String(cleaned.firstName).trim().toLowerCase();
-  if (cleaned.lastName) cleaned.lastName = String(cleaned.lastName).trim().toLowerCase();
-  if (cleaned.dob) cleaned.dob = String(cleaned.dob).trim();
-  if (cleaned.phone) cleaned.phone = cleanPhone(cleaned.phone);
-  if (cleaned.email) cleaned.email = String(cleaned.email).trim().toLowerCase();
-  await updateDoc(patientDoc(practiceId, patientId), cleaned);
 }
 
 export async function findDuplicates(candidate: Patient) {
@@ -74,37 +62,39 @@ export async function findDuplicates(candidate: Patient) {
   const scoped = patientsCollection(candidate.practiceId);
   const results: any[] = [];
 
+  // 1) Case-insensitive match on full name + DOB
   if (c.firstName && c.lastName && c.dob) {
     const q1 = query(
       scoped,
-      where("firstName", "==", c.firstName),
-      where("lastName", "==", c.lastName),
+      where("firstNameLower", "==", c.firstName),
+      where("lastNameLower", "==", c.lastName),
       where("dob", "==", c.dob),
       limit(10)
     );
     results.push(...(await getDocs(q1)).docs.map(d => ({ id: d.id, ...d.data(), practiceId: candidate.practiceId })));
   }
+
+  // 2) Same phone
   if (c.phone) {
     const q2 = query(scoped, where("phone", "==", c.phone), limit(10));
     results.push(...(await getDocs(q2)).docs.map(d => ({ id: d.id, ...d.data(), practiceId: candidate.practiceId })));
   }
+
+  // 3) Same email + name
   if (c.email && c.firstName && c.lastName) {
     const q3 = query(
       scoped,
       where("email", "==", c.email),
-      where("firstName", "==", c.firstName),
-      where("lastName", "==", c.lastName),
+      where("firstNameLower", "==", c.firstName),
+      where("lastNameLower", "==", c.lastName),
       limit(10)
     );
     results.push(...(await getDocs(q3)).docs.map(d => ({ id: d.id, ...d.data(), practiceId: candidate.practiceId })));
   }
 
+  // unique by doc id
   const seen = new Set<string>();
-  return results.filter((r) => {
-    if (seen.has(r.id)) return false;
-    seen.add(r.id);
-    return true;
-  });
+  return results.filter(r => (seen.has(r.id) ? false : (seen.add(r.id), true)));
 }
 
 export async function listPatients(practiceId: string) {
@@ -120,19 +110,43 @@ export async function listPatients(practiceId: string) {
 
 export async function createPatient(data: Patient) {
   if (!data.practiceId) throw new Error("Select a practice first.");
-  const cands = await findDuplicates(data);
-  if (cands.length > 0) {
-    const details = cands.map(d => `${d.firstName} ${d.lastName} — DOB ${d.dob || "-"} — ${d.phone || d.email || ""}`).join("\n");
+  const dupes = await findDuplicates(data);
+  if (dupes.length > 0) {
+    const details = dupes.map(d => `${d.firstName} ${d.lastName} — DOB ${d.dob || "-"} — ${d.phone || d.email || ""}`).join("\n");
     throw new Error(`Potential duplicate(s) found:\n${details}`);
   }
   const toSave: Patient = {
     ...data,
-    firstName: (data.firstName || "").trim().toLowerCase(),
-    lastName: (data.lastName || "").trim().toLowerCase(),
+    firstName: toTitleCase(data.firstName),
+    lastName: toTitleCase(data.lastName),
+    firstNameLower: (data.firstName || "").trim().toLowerCase(),
+    lastNameLower: (data.lastName || "").trim().toLowerCase(),
     dob: (data.dob || "").trim(),
     phone: cleanPhone(data.phone),
     email: (data.email || "").trim().toLowerCase(),
-    createdAt: serverTimestamp()
+    createdAt: serverTimestamp(),
   };
   await addDoc(patientsCollection(data.practiceId), toSave as any);
+}
+
+export async function getPatient(practiceId: string, id: string) {
+  const snap = await getDoc(doc(db, "practices", practiceId, "patients", id));
+  if (!snap.exists()) return null;
+  return { id: snap.id, ...snap.data() } as Patient;
+}
+
+export async function updatePatient(practiceId: string, id: string, data: Partial<Patient>) {
+  if (!practiceId || !id) throw new Error("Missing practice or patient ID.");
+  const patch: any = { ...data };
+  if (patch.firstName != null) {
+    patch.firstName = toTitleCase(patch.firstName);
+    patch.firstNameLower = String(patch.firstName).trim().toLowerCase();
+  }
+  if (patch.lastName != null) {
+    patch.lastName = toTitleCase(patch.lastName);
+    patch.lastNameLower = String(patch.lastName).trim().toLowerCase();
+  }
+  if (patch.email != null) patch.email = String(patch.email).trim().toLowerCase();
+  if (patch.phone != null) patch.phone = cleanPhone(patch.phone);
+  await updateDoc(doc(db, "practices", practiceId, "patients", id), patch);
 }
