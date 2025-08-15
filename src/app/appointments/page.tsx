@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState, useMemo, useRef } from "react";
+import { useEffect, useState, useRef } from "react";
 import { listPractices, type Practice } from "@/lib/practices";
 
-const DEFAULT_SETMORE_URL = process.env.NEXT_PUBLIC_SETMORE_ADMIN_URL || "https://app.setmore.com/";
+const DEFAULT_SETMORE_URL = "https://go.setmore.com";
 
 export default function AppointmentsPage() {
   const [practices, setPractices] = useState<Practice[]>([]);
@@ -16,8 +16,6 @@ export default function AppointmentsPage() {
       setPractices(rows);
     })();
   }, []);
-
-  const targetUrl = useMemo(() => DEFAULT_SETMORE_URL, []);
 
   return (
     <div className="space-y-4 p-4">
@@ -38,7 +36,7 @@ export default function AppointmentsPage() {
         </div>
         <div>
           <a
-            href={targetUrl}
+            href={DEFAULT_SETMORE_URL}
             target="_blank"
             rel="noopener noreferrer"
             className="border rounded px-3 py-1.5 bg-white text-black"
@@ -55,7 +53,7 @@ export default function AppointmentsPage() {
         <div className="relative min-h-[75vh]">
           <iframe
             ref={iframeRef}
-            src={targetUrl}
+            src={DEFAULT_SETMORE_URL}
             className="absolute inset-0 w-full h-full"
             allow="clipboard-write; fullscreen"
             sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
